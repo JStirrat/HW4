@@ -1,0 +1,488 @@
+<!-- 
+John Stirrat
+CPSC 332 Web Development
+HW4 - Flashcard App
+Last Modified 9/23/22
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Quiz App</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            font-family: Gotham Rounded;
+        }
+
+        :root {
+            --hue-neutral: 200;
+            --hue-wrong: 0;
+            --hue-correct: 145;
+        }
+
+        body {
+            --hue: var(--hue-neutral);
+            padding: 0;
+            margin: 0;
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+            background-color: hsl(var(--hue), 100%, 20%);
+        }
+
+        body.correct {
+            --hue: var(--hue-correct);
+        }
+
+        body.wrong {
+            --hue: var(--hue-wrong);
+        }
+
+        .container {
+            width: 800px;
+            max-width: 80%;
+            background-color: white;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 0 10px 2px;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(2, auto);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            --hue: var(--hue-neutral);
+            border: 1px solid hsl(var(--hue), 100%, 30%);
+            background-color: hsl(var(--hue), 100%, 50%);
+            border-radius: 5px;
+            padding: 5px 10px;
+            color: white;
+            outline: none;
+        }
+
+        .btn:hover {
+            border-color: black;
+        }
+
+        .btn.correct {
+            --hue: var(--hue-correct);
+            color: black;
+        }
+
+        .btn.wrong {
+            --hue: var(--hue-wrong);
+        }
+
+        .start-btn,
+        .next-btn,
+        .back-btn {
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 10px 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hide {
+            display: none;
+        }
+
+        #context-node {
+            border: 4px dotted blue;
+            box-shadow: none;
+            margin-bottom: 10px;
+        }
+
+        #options {
+            border: 4px dashed rgb(255, 0, 0);
+            border-radius: 5px;
+            padding: 5px 10px;
+            margin: 10px 10px;
+        }
+
+        #timer {
+            color: crimson;
+        }
+
+        .red {
+            background-color: red;
+        }
+    </style>
+    <script>
+
+        // Add an event listener for the DOMContentLoaded event
+        window.addEventListener("DOMContentLoaded", domLoaded);
+
+        function domLoaded() {
+            //buttons
+            const startButton = document.getElementById('start-btn')
+            const backButton = document.getElementById('back-btn')
+            const nextButton = document.getElementById('next-btn')
+
+            //elements
+            const containerElement = document.getElementById('container')
+            const outerElement = document.getElementById('outer')
+            const bodyElement = document.getElementById('body')
+            const questionContainerElement = document.getElementById('question-container')
+            const contextContainerElement = document.getElementById('context-container')
+            const answerButtonsElement = document.getElementById('answer-buttons')
+            const questionElement = document.getElementById('question')
+            const contextElement = document.getElementById('context')
+            const optionsContainerElement = document.getElementById('options')
+
+            //options
+            const shuffleBox = document.getElementById('shuffle')
+            const timedBox = document.getElementById('timed')
+            const removeBox = document.getElementById('remove')
+
+            let currentQuestionIndex = 0
+            let questionsList = undefined
+            let correctQuestions = []
+            let clock = null;
+            let totalTime = 0;
+            //using the domLoaded function because the buttons need to be rendered before we can
+            //add an event listener
+            startButton.addEventListener('click', startGame)
+            nextButton.addEventListener('click', () => {
+                currentQuestionIndex++
+                setNextQuestion()
+            })
+
+            backButton.addEventListener('click', () => {
+                currentQuestionIndex--
+                setNextQuestion()
+            })
+
+            //options stuff
+            let optionList = [true, false, false]
+            shuffleBox.addEventListener('click', () => {
+                if (document.getElementById("shuffle").checked) {
+                    optionList[0] = true
+                }
+                else {
+                    optionList[0] = false
+                }
+            })
+
+            timedBox.addEventListener('click', () => {
+                if (document.getElementById("timed").checked) {
+                    optionList[1] = true
+                }
+                else {
+                    optionList[1] = false
+                }
+            })
+
+            removeBox.addEventListener('click', () => {
+                if (document.getElementById("remove").checked) {
+                    optionList[2] = true
+                }
+                else {
+                    optionList[2] = false
+                }
+            })
+
+            //functions
+            function startGame() {
+                startButton.classList.add('hide')
+                optionsContainerElement.classList.add('hide')
+                currentQuestionIndex = 0
+                if (optionList[0] == true) {
+                    questionsList = questions.sort(() => Math.random() - .5)
+                }
+                else {
+                    questionsList = questions
+                }
+                if (optionList[1] == true) {
+                    let timerNode = document.createElement("div")
+                    timerNode.id = "timer-node"
+                    let parent = document.getElementById("controls")
+                    containerElement.insertBefore(timerNode, parent)
+                    startClock();
+                }
+                questionContainerElement.classList.remove('hide')
+                setNextQuestion()
+            }
+
+            function startClock() {
+                totalTime = 0
+                clock = setInterval(updateClock, 1000);
+            }
+
+            function stopClock() {
+                clearInterval(clock);
+            }
+
+            function updateClock() {
+                totalTime++
+                let minute = Math.floor(totalTime / 60)
+                let seconds = totalTime - (minute * 60)
+                let x = document.getElementById("timer-node");
+                x.innerText = minute + "m " + seconds + "s";
+                if (seconds == 30 || seconds == 32 || ((seconds == 0 || seconds == 2) && minute > 0)) {
+                    x.classList.add("red")
+                }
+                else {
+                    if (x.classList.contains("red")) {
+                        x.classList.remove("red")
+                    }
+                }
+            }
+
+            function setNextQuestion() {
+                resetState()
+                if (correctQuestions.length == 10) {
+                    showQuestion(final)
+                }
+                else {
+                    while (correctQuestions.includes(questionsList[currentQuestionIndex])) {
+                        questionsList.splice(currentQuestionIndex, 1)
+                    }
+                    showQuestion(questionsList[currentQuestionIndex])
+                }
+            }
+
+            function showQuestion(question) {
+                questionElement.innerText = question.question
+                question.answers.forEach(answer => {
+                    const button = document.createElement('button')
+                    button.innerText = answer.text
+                    button.classList.add('btn')
+                    if (answer.correct) {
+                        button.dataset.correct = answer.correct
+                    }
+                    button.addEventListener('click', selectAnswer)
+                    answerButtonsElement.appendChild(button)
+                })
+            }
+
+            function resetState() {
+                clearStatusClass(document.body)
+                nextButton.classList.add('hide')
+                backButton.classList.add('hide')
+                while (answerButtonsElement.firstChild) {
+                    answerButtonsElement.removeChild(answerButtonsElement.firstChild)
+                }
+                while (document.getElementById("context-node")) {
+                    outerElement.removeChild(document.getElementById("context-node"))
+                }
+
+            }
+
+            function selectAnswer(e) {
+                let firstAns = true
+                if (document.body.classList.contains("correct") || document.body.classList.contains("wrong")) {
+                    firstAns = false
+                }
+                const selectedButton = e.target
+                const correct = selectedButton.dataset.correct
+                setStatusClass(document.body, correct)
+                Array.from(answerButtonsElement.children).forEach(button => {
+                    setStatusClass(button, button.dataset.correct)
+                })
+                if (questions.length > currentQuestionIndex + 1) {
+                    if (currentQuestionIndex > 0) {
+                        backButton.classList.remove('hide')
+                    }
+                    nextButton.classList.remove('hide')
+                }
+                else {
+                    startButton.innerText = 'Back to Start'
+                    stopClock()
+                    startButton.classList.remove('hide')
+                }
+                if (firstAns == true) {
+                    let newNode = document.createElement("div")
+                    newNode.id = "context-node"
+                    newNode.classList.add("container")
+                    let parent = document.getElementById("container")
+                    newNode.appendChild(document.createTextNode(questionsList[currentQuestionIndex].context))
+                    outerElement.insertBefore(newNode, parent)
+
+                    if (selectedButton.dataset.correct && optionList[2] == true) {
+                        correctQuestions.push(questionsList[currentQuestionIndex])
+                    }
+                }
+
+            }
+
+            function setStatusClass(element, correct) {
+                clearStatusClass(element)
+                if (correct) {
+                    element.classList.add('correct')
+                } else {
+                    element.classList.add('wrong')
+                }
+            }
+
+            function clearStatusClass(element) {
+                element.classList.remove('correct')
+                element.classList.remove('wrong')
+            }
+
+            const questions = [
+                {
+                    question: '1. E#/Fb are not real notes',
+                    answers: [
+                        { text: 'True', correct: false },
+                        { text: 'False', correct: true },
+                    ],
+                    context: 'E# is just F Natural and F flat is just E natural! This is just an alternate notation for these notes',
+                    id: 1
+                },
+                {
+                    question: '2. Which of the following is a Woodwind instrument?',
+                    answers: [
+                        { text: 'Trumpet', correct: false },
+                        { text: 'Oboe', correct: true },
+                        { text: 'Trombone', correct: false },
+                        { text: 'Snare Drum', correct: false },
+                        { text: 'Violin', correct: false },
+                        { text: 'Mayonnaise', correct: false },
+                    ],
+                    context: 'The Oboe is the only woodwind listed below, the other instruments are either Brass, Percussion, or Strings. And yes, mayonnaise is an instrument',
+                    id: 2
+                },
+                {
+                    question: '3. 4/4 is also called Common Time',
+                    answers: [
+                        { text: 'True', correct: true },
+                        { text: 'False', correct: false },
+                    ],
+                    context: 'This can be denoted by a \'C\' where the time signature should be',
+                    id: 3
+                },
+                {
+                    question: '4. Who is know for composing Second Suite in F?',
+                    answers: [
+                        { text: 'Ludwig Van Beethoven', correct: false },
+                        { text: 'Peter Tschaikowski', correct: false },
+                        { text: 'Eric Whitacre', correct: false },
+                        { text: 'Gustav Holst', correct: true },
+                    ],
+                    context: 'He is also very well known for composing First Suite in Eb, which is similar in style to his Second Suite',
+                    id: 4
+                },
+                {
+                    question: '5. Full Orchestras have Saxophones ',
+                    answers: [
+                        { text: 'True', correct: false },
+                        { text: 'False', correct: true },
+                    ],
+                    context: 'The Saxophone is more of a modern instrument, so typically it is not included in true orchestras',
+                    id: 5
+                },
+                {
+                    question: '6. A Brass Quintet does not contain which of the following: ',
+                    answers: [
+                        { text: 'English Horn', correct: true },
+                        { text: 'Trumpet', correct: false },
+                        { text: 'Euphonium', correct: false },
+                        { text: 'French Horn', correct: false },
+                    ],
+                    context: 'The English horn is similar to an Oboe, and so it is not a brass instrument. The other 3 options are all brass instruments, and are all part of a classic Brass Quintet',
+                    id: 6
+                },
+                {
+                    question: '7. What is the smallest unit used to determine pitch when tuning an instrument?',
+                    answers: [
+                        { text: 'Dollars', correct: false },
+                        { text: 'Points', correct: false },
+                        { text: 'Cents', correct: true },
+                        { text: 'Degrees', correct: false },
+                    ],
+                    context: 'This can be denoted by a \'C\' where the time signature should be',
+                    id: 7
+                },
+                {
+                    question: '8. What is a real clef?',
+                    answers: [
+                        { text: 'Tenor Clef', correct: true },
+                        { text: 'Upper Clef', correct: false },
+                        { text: 'Lower Clef', correct: false },
+                        { text: 'Brass Clef', correct: false },
+                    ],
+                    context: 'The most notable clefs are Treble Clef, Bass Clef, Alto Clef, and Tenor Clef, which is indeed a real clef',
+                    id: 8
+                },
+                {
+                    question: '9. There are trombones that do not have slides',
+                    answers: [
+                        { text: 'True', correct: true },
+                        { text: 'False', correct: false },
+                    ],
+                    context: 'There are valve trombones, which have valves like a trumpet, but are otherwise the exact same as a traditional trombone',
+                    id: 9
+                },
+                {
+                    question: '10. Trumpet is the best instrument',
+                    answers: [
+                        { text: 'True', correct: true },
+                        { text: 'False', correct: false },
+                    ],
+                    context: 'What more is there to say?',
+                    id: 10
+                },
+
+            ]
+            const final = {
+                question: 'All Questions Answered! Nice Job!',
+                answers: [],
+                context: '',
+                id: 0
+            }
+        }
+    </script>
+</head>
+
+<body id="body">
+    <div id="outer">
+        <div id="container" class="container">
+            <div id="question-container" class="hide">
+                <div id="question">Question</div>
+                <div id="answer-buttons" class="btn-grid">
+                    <button class="btn">Answer 1</button>
+                    <button class="btn">Answer 2</button>
+                    <button class="btn">Answer 3</button>
+                    <button class="btn">Answer 4</button>
+                </div>
+            </div>
+            <div class="options">
+                <fieldset id="options">
+                    <legend><strong>Options:</strong></legend>
+                    <label for="shuffle">Shuffle Cards:</label>
+                    <input type="checkbox" id="shuffle" name="shuffle" checked>
+                    <label for="timed">Timed Session:</label>
+                    <input type="checkbox" id="timed" name="timed">
+                    <label for="remove">Remove Correct From Deck:</label>
+                    <input type="checkbox" id="remove" name="remove">
+                </fieldset>
+            </div>
+            <div class="controls">
+                <button id="start-btn" class="start-btn btn">Start</button>
+                <button id="back-btn" class="back-btn btn hide">Back</button>
+                <button id="next-btn" class="next-btn btn hide">Next</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+
+
+</html>
